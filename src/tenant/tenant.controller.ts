@@ -4,7 +4,7 @@ import { CurrentTenant } from './current-tenant.decorator';
 
 /**
  * Sonde du socle (FR-009) : vérifie le middleware et le décorateur.
- * À supprimer dès qu'un endpoint métier existe.
+ * Sonde conservée pour les tests du lot 0.
  */
 @Controller('tenant')
 export class TenantController {
