@@ -137,3 +137,17 @@ Le `tsconfig.json` racine sert aussi de configuration aux outils qui lisent hors
 (`jest.config.ts`, `prisma7.config.ts`, `test/*.e2e-spec.ts`) : avec `rootDir: "./src"`, `tsc --noEmit`
 sur ce fichier refuse les fichiers situés au-dessus de la racine. Le build n'est pas concerné,
 `tsconfig.build.json` réimposant `rootDir: "./src"`, donc `dist/` garde sa structure.
+
+## 2026-09-12 — Catalogue chargé par seed, pas d'API d'administration
+
+Contexte : deux jours ; l'admin du catalogue coûte une dizaine d'endpoints sans valeur de démonstration.
+Décision : script de seed idempotent, catalogue en lecture seule via l'API.
+Écarté : CRUD complet du catalogue.
+Conséquence : le catalogue se modifie en base ou par le seed ; à ajouter si le projet continue.
+
+## 2026-09-12 — Options non cochées par défaut, type de produit immuable
+
+Décision : une opération OFFER est proposée décochée (le vendeur choisit, règle métier 1) ; le type de
+produit d'une prestation ne change pas, on recrée une prestation.
+Écarté : options précochées ; recomposition sur changement de type (cas limite du périmètre reporté).
+Conséquence : un cas limite du périmètre (changement de type) sort du week-end, documenté.
