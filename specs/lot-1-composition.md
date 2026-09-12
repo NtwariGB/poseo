@@ -110,6 +110,13 @@ operations: [{ operationId, code, label, referenceDurationMinutes, origin, selec
   (TVA 2000 bp, validité 30 jours) et le catalogue décrit ci-dessous. Relançable sans doublon.
 - **FR-110** : toute écriture (FR-101 à FR-103) est refusée si `status != DRAFT` (409).
 
+- **FR-111** : `PUT /compositions/:id/constraints` et `PATCH /compositions/:id/operations/:operationId`
+  répondent 200 avec la représentation FR-108 complète et à jour.
+- **FR-112** : `PUT /constraints` est atomique : un seul `constraintTypeId` inconnu rejette la requête
+  entière (404), la prestation reste inchangée.
+- **FR-113** : `prisma/seed.ts` exporte `seed(): Promise<void>`, sans argument, autonome pour sa
+  connexion, idempotente ; le script npm l'appelle.
+
 ## Catalogue seed (tenant LM-FR)
 
 - Types de produit : `DISHWASHER_BUILTIN` « Lave-vaisselle encastrable », `WATER_HEATER_ELEC`
