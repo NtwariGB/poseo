@@ -58,6 +58,8 @@ sans deviner.
   class-validator sortent aussi au format `{ code: "VALIDATION_FAILED", message, details }`.
 - **FR-007** : `ValidationPipe` global avec `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`.
 - **FR-008** : configuration via `@nestjs/config`, `DATABASE_URL` obligatoire au démarrage.
+- **FR-009** : route de sonde `GET /tenant/me` qui renvoie `{ id, code }` du tenant courant
+  (sert à vérifier le middleware et le décorateur ; supprimée quand un vrai endpoint existera).
 
 ## Entités concernées
 
