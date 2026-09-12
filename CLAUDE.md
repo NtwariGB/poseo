@@ -12,6 +12,7 @@ il est représenté par un consommateur Kafka de démonstration.
 - `specs/lot-N-*.md` : spec du lot en cours.
 - `specs/reviews/lot-N.md` : rapport de revue du lot.
 - `DECISIONS.md` : journal des arbitrages. Toute décision y est tracée avec date et raison.
+- `specs/TEMPLATE-lot.md` : gabarit obligatoire de toute spec de lot.
 
 ## Méthode (non négociable)
 
