@@ -7,3 +7,354 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum CompositionRuleKind {
+  REQUIRE
+  OFFER
+  FORBID
+  SURCHARGE
+
+  @@map("composition_rule_kind")
+}
+
+enum CompositionStatus {
+  DRAFT
+  QUOTED
+  ACCEPTED
+
+  @@map("composition_status")
+}
+
+enum ServiceOperationOrigin {
+  MANDATORY
+  OPTIONAL
+
+  @@map("service_operation_origin")
+}
+
+enum QuoteStatus {
+  ISSUED
+  ACCEPTED
+  EXPIRED
+  SUPERSEDED
+
+  @@map("quote_status")
+}
+
+enum QuoteLineKind {
+  OPERATION
+  SURCHARGE
+
+  @@map("quote_line_kind")
+}
+
+// ---------------------------------------------------------------------------
+// Référentiel (module catalog)
+// ---------------------------------------------------------------------------
+
+/// Une enseigne dans un pays. Racine de l'isolation multi-tenant.
+model Tenant {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  code              String   @unique
+  name              String
+  countryCode       String   @map("country_code") @db.Char(2)
+  vatRateBp         Int      @map("vat_rate_bp")
+  quoteValidityDays Int      @map("quote_validity_days")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  productTypes     ProductType[]
+  operations       Operation[]
+  zones            Zone[]
+  zonePostalCodes  ZonePostalCode[]
+  laborRates       LaborRate[]
+  constraintTypes  ConstraintType[]
+  compositionRules CompositionRule[]
+  compositions     ServiceComposition[]
+  quotes           Quote[]
+  quoteCounters    QuoteCounter[]
+
+  @@map("tenant")
+}
+
+/// Catégorie de produit installable. Déclencheur des règles de composition.
+model ProductType {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String
+  label     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant           Tenant               @relation(fields: [tenantId], references: [id])
+  compositionRules CompositionRule[]
+  compositions     ServiceComposition[]
+
+  @@unique([tenantId, code])
+  @@map("product_type")
+}
+
+/// Unité de travail du catalogue, avec sa durée de référence.
+model Operation {
+  id                       String   @id @default(uuid(7)) @db.Uuid
+  tenantId                 String   @map("tenant_id") @db.Uuid
+  code                     String
+  label                    String
+  referenceDurationMinutes Int      @map("reference_duration_minutes")
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  compositionRules  CompositionRule[]
+  serviceOperations ServiceOperation[]
+
+  @@unique([tenantId, code])
+  @@map("operation")
+}
+
+/// Découpage géographique du tenant.
+model Zone {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String
+  label     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id])
+  postalCodes ZonePostalCode[]
+  laborRates  LaborRate[]
+
+  @@unique([tenantId, code])
+  @@map("zone")
+}
+
+/// Code postal couvert par une zone. Un code postal appartient à une seule zone d'un tenant.
+model ZonePostalCode {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  zoneId     String   @map("zone_id") @db.Uuid
+  postalCode String   @map("postal_code")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, postalCode])
+  @@map("zone_postal_code")
+}
+
+/// Taux horaire d'une zone, versionné : on n'écrase jamais un taux, on en ajoute un.
+/// Le taux applicable à un instant t est celui de plus grand `validFrom <= t`.
+model LaborRate {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  zoneId          String   @map("zone_id") @db.Uuid
+  hourlyRateCents Int      @map("hourly_rate_cents")
+  validFrom       DateTime @map("valid_from") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  @@unique([zoneId, validFrom])
+  @@map("labor_rate")
+}
+
+/// Contrainte client possible (NO_ELEVATOR, HARD_ACCESS...).
+model ConstraintType {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String
+  label     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  compositionRules   CompositionRule[]
+  serviceConstraints ServiceConstraint[]
+
+  @@unique([tenantId, code])
+  @@map("constraint_type")
+}
+
+/// Règle de composition, déclenchée par un type de produit seul ou combiné à une contrainte.
+///
+/// Deux invariants ne sont pas exprimables dans le schéma Prisma et sont posés en CHECK
+/// SQL brut dans la migration (voir DECISIONS.md) :
+///   - REQUIRE / OFFER / FORBID exigent `operation_id` ; SURCHARGE l'interdit ;
+///   - SURCHARGE exige exactement un de `surcharge_percent_bp` / `surcharge_cents`,
+///     les autres genres n'en portent aucun.
+///
+/// Pas de contrainte d'unicité : `constraint_type_id` et `operation_id` sont nullables et la
+/// cohérence du catalogue relève de la règle applicative (FORBID > REQUIRE > OFFER).
+model CompositionRule {
+  id                 String              @id @default(uuid(7)) @db.Uuid
+  tenantId           String              @map("tenant_id") @db.Uuid
+  productTypeId      String              @map("product_type_id") @db.Uuid
+  constraintTypeId   String?             @map("constraint_type_id") @db.Uuid
+  kind               CompositionRuleKind
+  operationId        String?             @map("operation_id") @db.Uuid
+  label              String?
+  surchargePercentBp Int?                @map("surcharge_percent_bp")
+  surchargeCents     Int?                @map("surcharge_cents")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  productType    ProductType     @relation(fields: [productTypeId], references: [id])
+  constraintType ConstraintType? @relation(fields: [constraintTypeId], references: [id])
+  operation      Operation?      @relation(fields: [operationId], references: [id])
+
+  @@map("composition_rule")
+}
+
+// ---------------------------------------------------------------------------
+// Prestation (module service)
+// ---------------------------------------------------------------------------
+
+/// Brouillon de travail du vendeur. La zone n'est pas stockée : elle est résolue depuis
+/// `postalCode` à chaque calcul, pour que le versioning des grilles s'applique.
+model ServiceComposition {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  tenantId      String            @map("tenant_id") @db.Uuid
+  productTypeId String            @map("product_type_id") @db.Uuid
+  productRef    String            @map("product_ref")
+  addressLine   String            @map("address_line")
+  postalCode    String            @map("postal_code")
+  city          String
+  status        CompositionStatus @default(DRAFT)
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  productType ProductType         @relation(fields: [productTypeId], references: [id])
+  constraints ServiceConstraint[]
+  operations  ServiceOperation[]
+  quotes      Quote[]
+
+  @@index([tenantId, status])
+  @@map("service_composition")
+}
+
+/// Contrainte déclarée sur une prestation.
+model ServiceConstraint {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  compositionId    String   @map("composition_id") @db.Uuid
+  constraintTypeId String   @map("constraint_type_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  composition    ServiceComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  constraintType ConstraintType     @relation(fields: [constraintTypeId], references: [id])
+
+  @@unique([compositionId, constraintTypeId])
+  @@map("service_constraint")
+}
+
+/// Opération retenue sur une prestation, résultat de la composition.
+/// `selected` est toujours vrai quand `origin = MANDATORY` (règle applicative).
+model ServiceOperation {
+  id            String                 @id @default(uuid(7)) @db.Uuid
+  compositionId String                 @map("composition_id") @db.Uuid
+  operationId   String                 @map("operation_id") @db.Uuid
+  origin        ServiceOperationOrigin
+  selected      Boolean                @default(true)
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  composition ServiceComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  operation   Operation          @relation(fields: [operationId], references: [id])
+
+  @@unique([compositionId, operationId])
+  @@map("service_operation")
+}
+
+// ---------------------------------------------------------------------------
+// Devis (module quote)
+// ---------------------------------------------------------------------------
+
+/// Photographie immuable d'une prestation à un instant. Aucune colonne n'est modifiable
+/// après création, sauf `status` et `accepted_at`.
+///
+/// L'invariant « au plus un devis ISSUED et au plus un devis ACCEPTED par prestation » repose
+/// sur deux index uniques partiels, non exprimables dans le schéma Prisma. Ils sont ajoutés à la
+/// main en SQL brut dans la migration (voir DECISIONS.md, 2026-09-12) :
+///   CREATE UNIQUE INDEX quote_one_issued_per_composition
+///     ON quote (composition_id) WHERE status = 'ISSUED';
+///   CREATE UNIQUE INDEX quote_one_accepted_per_composition
+///     ON quote (composition_id) WHERE status = 'ACCEPTED';
+model Quote {
+  id               String      @id @default(uuid(7)) @db.Uuid
+  tenantId         String      @map("tenant_id") @db.Uuid
+  compositionId    String      @map("composition_id") @db.Uuid
+  number           String
+  status           QuoteStatus
+  issuedAt         DateTime    @map("issued_at") @db.Timestamptz(3)
+  validUntil       DateTime    @map("valid_until") @db.Timestamptz(3)
+  acceptedAt       DateTime?   @map("accepted_at") @db.Timestamptz(3)
+  zoneCode         String      @map("zone_code")
+  hourlyRateCents  Int         @map("hourly_rate_cents")
+  productTypeLabel String      @map("product_type_label")
+  laborCents       Int         @map("labor_cents")
+  surchargeCents   Int         @map("surcharge_cents")
+  subtotalCents    Int         @map("subtotal_cents")
+  vatRateBp        Int         @map("vat_rate_bp")
+  vatCents         Int         @map("vat_cents")
+  totalCents       Int         @map("total_cents")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  composition ServiceComposition @relation(fields: [compositionId], references: [id])
+  lines       QuoteLine[]
+
+  @@unique([tenantId, number])
+  @@index([status, validUntil])
+  @@map("quote")
+}
+
+/// Ligne détaillée du devis. Pour SURCHARGE, `duration_minutes` et `hourly_rate_cents` sont nuls.
+model QuoteLine {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  quoteId         String        @map("quote_id") @db.Uuid
+  position        Int
+  kind            QuoteLineKind
+  label           String
+  durationMinutes Int?          @map("duration_minutes")
+  hourlyRateCents Int?          @map("hourly_rate_cents")
+  amountCents     Int           @map("amount_cents")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, position])
+  @@map("quote_line")
+}
+
+/// Compteur de numérotation, un par tenant et par année. Incrémenté dans la transaction
+/// d'émission avec verrou de ligne (SELECT ... FOR UPDATE).
+model QuoteCounter {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  year      Int
+  lastValue Int      @map("last_value")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, year])
+  @@map("quote_counter")
+}
+
+// ---------------------------------------------------------------------------
+// Événements (module outbox)
+// ---------------------------------------------------------------------------
+
+/// Table lue par Debezium (Outbox Event Router). Les noms de colonnes `aggregatetype`,
+/// `aggregateid`, `type` et `payload` sont imposés par le connecteur. Écrite dans la même
+/// transaction que le changement métier, jamais mise à jour, jamais supprimée.
+model OutboxEvent {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  aggregateType String   @map("aggregatetype")
+  aggregateId   String   @map("aggregateid") @db.Uuid
+  type          String
+  payload       Json     @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("outbox_event")
+}

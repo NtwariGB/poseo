@@ -1,7 +1,10 @@
 # Modèle de domaine
 
 Conventions : identifiants UUID v7, montants en centimes, durées en minutes, pourcentages en
-points de base (1 % = 100 bp). Toute entité métier porte un `tenantId`.
+points de base (1 % = 100 bp). Toute entité racine porte un `tenantId` ; les entités filles
+(`ServiceConstraint`, `ServiceOperation`, `QuoteLine`) sont isolées par leur parent et n'en portent
+pas. Seule exception, `ZonePostalCode` porte un `tenantId` parce que son unicité est définie au
+niveau du tenant.
 
 ## 1. Référentiel (module `catalog`)
 
@@ -75,6 +78,8 @@ interdite et requise est interdite (et c'est une incohérence de catalogue à si
 Le brouillon de travail du vendeur.
 
 - `tenantId`, `productTypeId`
+- `productRef` : référence article du produit acheté par le client. Obligatoire. Le produit lui-même
+  n'est pas chiffré (hors périmètre), il est seulement référencé.
 - Adresse client : `addressLine`, `postalCode`, `city`
 - `status` : `DRAFT` | `QUOTED` | `ACCEPTED`
 - `createdAt`, `updatedAt`
@@ -134,6 +139,15 @@ Cycle de vie du devis :
 - `ACCEPTED`, `EXPIRED`, `SUPERSEDED` sont terminaux
 
 Invariant : au plus un devis `ISSUED` et au plus un devis `ACCEPTED` par prestation.
+
+### QuoteCounter
+
+Compteur de numérotation des devis, un par tenant et par année (voir DECISIONS.md).
+
+- Clé primaire composite : `tenantId`, `year`
+- `lastValue` : dernière séquence attribuée pour ce tenant et cette année
+- Incrémenté dans la transaction d'émission, avec verrou de ligne (`SELECT ... FOR UPDATE`).
+  `Quote.number` vaut `Q-<year>-<lastValue sur 6 chiffres>`.
 
 ## 4. Événements (module `outbox`)
 
