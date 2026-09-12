@@ -201,8 +201,8 @@ model CompositionRule {
 
   tenant         Tenant          @relation(fields: [tenantId], references: [id])
   productType    ProductType     @relation(fields: [productTypeId], references: [id])
-  constraintType ConstraintType? @relation(fields: [constraintTypeId], references: [id])
-  operation      Operation?      @relation(fields: [operationId], references: [id])
+  constraintType ConstraintType? @relation(fields: [constraintTypeId], references: [id], onDelete: Restrict)
+  operation      Operation?      @relation(fields: [operationId], references: [id], onDelete: Restrict)
 
   @@map("composition_rule")
 }
