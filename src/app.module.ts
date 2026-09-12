@@ -1,21 +1,56 @@
-import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  ValidationError as ClassValidatorError,
+  ValidationPipe,
+} from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { ValidationError } from './common/errors/validation-error';
+import { DomainErrorFilter } from './common/filters/domain-error.filter';
+import { validateEnv } from './config/env.validation';
+import { HealthModule } from './health/health.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { TenantMiddleware } from './tenant/tenant.middleware';
+import { TenantModule } from './tenant/tenant.module';
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'poseo',
-    }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    PrismaModule,
+    HealthModule,
+    TenantModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    { provide: APP_FILTER, useClass: DomainErrorFilter },
+    {
+      provide: APP_PIPE,
+      useValue: new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        // Les refus de class-validator sortent au même format que le reste
+        // du domaine, via l'unique filtre DomainErrorFilter.
+        exceptionFactory: (errors: ClassValidatorError[]) =>
+          new ValidationError(
+            'VALIDATION_FAILED',
+            'Requête invalide.',
+            errors.map((error) => ({
+              field: error.property,
+              constraints: Object.values(error.constraints ?? {}),
+            })),
+          ),
+      }),
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // FR-004 : le tenant est exigé partout sauf sur la sonde technique.
+  configure(consumer: MiddlewareConsumer): void {
+    consumer
+      .apply(TenantMiddleware)
+      .exclude('health')
+      .forRoutes('{*path}');
+  }
+}
