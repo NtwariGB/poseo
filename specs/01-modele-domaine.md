@@ -164,7 +164,7 @@ jamais supprimée.
 
 ## 6. Points à trancher (→ DECISIONS.md)
 
-- Numérotation des devis : séquence PostgreSQL par tenant ou table compteur ? [À CLARIFIER]
+- Numérotation des devis : séquence PostgreSQL par tenant ou table compteur ? Tranché voir DECISIONS.md
 - Invariant « au plus un ISSUED / un ACCEPTED par prestation » : index unique partiel (SQL brut dans la
-  migration) ou contrôle applicatif dans la transaction ? [À CLARIFIER]
+  migration) ou contrôle applicatif dans la transaction ? Tranché voir DECISIONS.md
 - Arrondi des montants : au centime le plus proche (banker's rounding non nécessaire). Tranché.
