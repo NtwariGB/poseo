@@ -127,3 +127,13 @@ en 5.2.1, déjà embarqué par `@nestjs/platform-express@11`, donc la syntaxe de
 montée à Node 24 (hors stack annoncée) ; transpilation de `node_modules/@nestjs/*` en CommonJS
 (lente et fragile).
 Conséquence : la montée en NestJS 12 est un passage à ESM, à traiter avec la montée Prisma 8.
+Conséquence : `@nestjs/observe` retiré des dépendances — paquet de la ligne Nest 12 (ajouté par
+l'échafaudage), sans équivalent en ligne 11 et importé nulle part dans `src/`. `@nestjs/cli` et
+`@nestjs/schematics` ramenés en `^11` pour que `nest g` échafaude du code ciblant le runtime en place.
+
+## 2026-09-12 — `rootDir: "."` dans `tsconfig.json`
+
+Le `tsconfig.json` racine sert aussi de configuration aux outils qui lisent hors de `src/`
+(`jest.config.ts`, `prisma7.config.ts`, `test/*.e2e-spec.ts`) : avec `rootDir: "./src"`, `tsc --noEmit`
+sur ce fichier refuse les fichiers situés au-dessus de la racine. Le build n'est pas concerné,
+`tsconfig.build.json` réimposant `rootDir: "./src"`, donc `dist/` garde sa structure.

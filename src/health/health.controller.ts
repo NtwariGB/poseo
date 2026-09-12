@@ -1,6 +1,6 @@
 import { Controller, Get, HttpStatus, Logger, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { PrismaService } from '../prisma/prisma.service';
+import { HealthRepository } from './health.repository';
 
 type HealthBody = { status: 'ok' | 'error'; db: 'up' | 'down' };
 
@@ -9,14 +9,14 @@ type HealthBody = { status: 'ok' | 'error'; db: 'up' | 'down' };
 export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly health: HealthRepository) {}
 
   @Get()
   async check(
     @Res({ passthrough: true }) response: Response,
   ): Promise<HealthBody> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await this.health.ping();
       return { status: 'ok', db: 'up' };
     } catch (error) {
       this.logger.error('Sonde base en échec', error as Error);
