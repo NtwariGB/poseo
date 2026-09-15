@@ -23,7 +23,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json",
     "infra:up": "bash scripts/infra-up.sh",
-    "infra:down": "docker compose down"
+    "infra:down": "docker compose down",
+    "up": "bash scripts/up.sh"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.3",
