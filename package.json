@@ -13,6 +13,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "web": "npm --prefix web run dev",
     "lint": "oxlint src/ test/",
     "seed": "ts-node -r ./scripts/resolve-ts-js-imports.js prisma/seed.ts",
     "consume": "ts-node scripts/consume.ts",

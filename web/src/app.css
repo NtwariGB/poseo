@@ -1,0 +1,491 @@
+/*
+ * Principe visuel du lot 3 : ce que le vendeur saisit est sur blanc, ce que le serveur
+ * calcule est sur fond teinté (`--computed`). Une seule règle, tenue partout, pour que
+ * la frontière « aucune règle métier côté navigateur » se voie à l'écran.
+ */
+
+:root {
+  --ink: #16202a;
+  --muted: #5a6872;
+  --surface: #ffffff;
+  --ground: #e9edec;
+  --computed: #f0f3f2;
+  --line: #d3d8dc;
+  --pine: #0c5c4c;
+  --pine-dark: #084438;
+
+  --warn: #8a6410;
+  --warn-ground: #fbf3e0;
+  --error: #9b2c2c;
+  --error-ground: #fbeded;
+
+  --step: 1rem;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Montants, durées, numéros : chiffres de même chasse, pour que les colonnes s'alignent. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- ossature ---------- */
+
+.page {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 0 var(--step) calc(var(--step) * 4);
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--step);
+  padding-block: calc(var(--step) * 1.75) var(--step);
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: calc(var(--step) * 1.5);
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+
+.masthead p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.tenant {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.tenant code {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  margin-bottom: calc(var(--step) * 1.25);
+}
+
+.block > h2 {
+  margin: 0;
+  padding: calc(var(--step) * 0.85) var(--step);
+  font-size: 17px;
+  font-weight: 620;
+  border-bottom: 1px solid var(--line);
+}
+
+.block[data-locked='true'] > h2 {
+  color: var(--muted);
+}
+
+.block-body {
+  padding: var(--step);
+}
+
+/* Le panneau du serveur : tout ce qui s'y trouve vient de l'API. */
+.computed {
+  background: var(--computed);
+  border-top: 1px solid var(--line);
+  padding: var(--step);
+}
+
+.computed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem calc(var(--step) * 1.5);
+  margin-bottom: calc(var(--step) * 0.75);
+}
+
+.computed-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 620;
+}
+
+.origin-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- formulaire ---------- */
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--step) * 0.75) var(--step);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field.wide {
+  grid-column: 1 / -1;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input[type='text'],
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.4rem 0.5rem;
+  width: 100%;
+}
+
+input[type='text']:focus-visible,
+select:focus-visible,
+button:focus-visible,
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--pine);
+  outline-offset: 1px;
+}
+
+input:disabled,
+select:disabled {
+  background: var(--ground);
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--step);
+  margin-top: var(--step);
+}
+
+button {
+  font: inherit;
+  font-weight: 560;
+  background: var(--pine);
+  color: #fff;
+  border: 1px solid var(--pine);
+  border-radius: 2px;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--pine-dark);
+  border-color: var(--pine-dark);
+}
+
+button:disabled {
+  background: var(--ground);
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+button.quiet {
+  background: transparent;
+  color: var(--pine);
+}
+
+button.quiet:hover:not(:disabled) {
+  background: var(--computed);
+  color: var(--pine-dark);
+}
+
+.busy {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- listes à cocher ---------- */
+
+.checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.35rem var(--step);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.check input {
+  margin: 0;
+  accent-color: var(--pine);
+}
+
+.check.locked {
+  color: var(--muted);
+}
+
+/* ---------- opérations retenues ---------- */
+
+.operations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.operations li {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr auto auto;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.operations .origin {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.operations .mandatory {
+  color: var(--pine);
+}
+
+.operations .time {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 5.5rem;
+  text-align: right;
+}
+
+.operations .fixed {
+  color: var(--pine);
+}
+
+/* ---------- devis ---------- */
+
+.quote-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem var(--step);
+  margin-bottom: var(--step);
+}
+
+.quote-number {
+  font-size: 22px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+.quote-meta {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+}
+
+.quote-status {
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.lines {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--step);
+}
+
+.lines th,
+.lines td {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.lines th {
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--muted);
+}
+
+.lines .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lines .surcharge td:first-child::after {
+  content: ' (majoration)';
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.totals {
+  margin: 0 0 var(--step) auto;
+  width: min(100%, 22rem);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 1rem;
+}
+
+.totals dt {
+  color: var(--muted);
+}
+
+.totals dd {
+  margin: 0;
+  text-align: right;
+}
+
+.totals .grand {
+  font-weight: 620;
+  color: var(--ink);
+  border-top: 1px solid var(--line);
+  padding-top: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.totals dd.grand {
+  font-size: 17px;
+}
+
+/* Le devis accepté : seul élément à porter un bord plein. */
+.quote.accepted {
+  border-left: 4px solid var(--pine);
+  padding-left: calc(var(--step) - 4px);
+}
+
+.history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+/* Statut lu, jamais déduit : l'API dit SUPERSEDED ou EXPIRED, la ligne se grise. */
+.history li.spent {
+  color: var(--muted);
+}
+
+.history .when {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- avertissements et erreurs ---------- */
+
+.warnings {
+  margin: var(--step) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.warnings li {
+  background: var(--warn-ground);
+  border-left: 3px solid var(--warn);
+  color: var(--warn);
+  padding: 0.45rem 0.65rem;
+  margin-bottom: 0.35rem;
+}
+
+.banner {
+  background: var(--error-ground);
+  border-top: 1px solid var(--line);
+  border-left: 3px solid var(--error);
+  color: var(--error);
+  padding: 0.6rem var(--step);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+}
+
+.banner .code {
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .masthead,
+  .quote-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tenant,
+  .quote-meta {
+    text-align: left;
+  }
+
+  .operations li {
+    grid-template-columns: 1.4rem 1fr auto;
+  }
+
+  .history li {
+    grid-template-columns: auto 1fr;
+  }
+
+  .operations .time {
+    grid-column: 2 / -1;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
