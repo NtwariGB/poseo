@@ -30,3 +30,4 @@ développeur donne lieu à un nouvel ADR.
 | 0022 | 2026-09-15 | [Le verrou de la prestation ne porte que sur ACCEPTED](0022-le-verrou-de-la-prestation-ne-porte-que-sur-accepted.md)    | accepté |
 | 0023 | 2026-09-15 | [Acceptation refusée si la prestation a bougé depuis l'émission](0023-acceptation-refusee-si-la-prestation-a-bouge.md)  | accepté |
 | 0024 | 2026-09-15 | [Page de démonstration vérifiée à la main, sans test navigateur](0024-page-de-demonstration-verifiee-a-la-main.md)      | accepté |
+| 0025 | 2026-09-15 | [Arbitrages du lot 3 (page de démonstration)](0025-arbitrages-du-lot-3-page-de-demonstration.md) | accepté |

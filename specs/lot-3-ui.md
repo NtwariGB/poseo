@@ -14,9 +14,9 @@ statut, tout warning vient du serveur.
 
 - **UI-301** : projet Vite + Svelte 5 dans `web/`, TypeScript, sans librairie UI. Proxy Vite
   `/api` → `http://localhost:3000`. Script racine `npm run web` qui lance Vite.
-- **UI-302** : tenant fixé à `LM-FR` : au chargement, la page lit `GET /api/catalog/product-types`
-  avec l'en-tête `X-Tenant-Id` résolu une fois (identifiant lu depuis `VITE_TENANT_ID`, ou saisi
-  dans un champ en haut de page si absent).
+- **UI-302** : tenant fixé au tenant `LM-FR` du seed, identifié par son UUID : au chargement, la
+  page lit `GET /api/catalog/product-types` avec l'en-tête `X-Tenant-Id` résolu une fois (UUID lu
+  depuis `VITE_TENANT_ID`, ou saisi dans un champ en haut de page si absent).
 - **UI-303** : bloc « Prestation » : sélection du type de produit, référence produit, adresse,
   code postal, ville, bouton « Composer » → `POST /api/compositions`. Affiche zone (ou avertissement
   hors zone), liste des opérations avec origine (obligatoire / option) et case à cocher pour les options.
