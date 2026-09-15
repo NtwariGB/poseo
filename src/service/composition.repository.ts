@@ -144,18 +144,34 @@ export class CompositionRepository {
   /**
    * FR-102 : remplace d'un bloc les contraintes déclarées et les opérations retenues.
    * Une seule transaction, pour qu'aucune lecture ne voie une composition à moitié recomposée.
+   *
+   * Rend `null` si la prestation n'appartient pas (ou plus) au tenant : la vérification
+   * faite par le service avant l'appel ne vaut que pour l'instant où elle a eu lieu, donc
+   * chaque écriture refiltre sur le tenant dans la transaction qui écrit.
    */
   async replaceConstraintsAndOperations(
+    tenantId: string,
     compositionId: string,
     constraintTypeIds: readonly string[],
     operations: readonly CompositionOperationState[],
-  ): Promise<CompositionRecord> {
+  ): Promise<CompositionRecord | null> {
     const keptOperationIds = operations.map(
       (operation) => operation.operationId,
     );
 
     const row = await this.prisma.$transaction(async (tx) => {
-      await tx.serviceConstraint.deleteMany({ where: { compositionId } });
+      // Touche la prestation et prouve son appartenance d'un même geste : sans ligne
+      // touchée, rien n'est écrit derrière.
+      // `updatedAt` ne bouge que si la prestation elle-même est touchée.
+      const touched = await tx.serviceComposition.updateMany({
+        where: { id: compositionId, tenantId },
+        data: {},
+      });
+      if (touched.count === 0) return null;
+
+      await tx.serviceConstraint.deleteMany({
+        where: { compositionId, composition: { tenantId } },
+      });
       if (constraintTypeIds.length > 0) {
         await tx.serviceConstraint.createMany({
           data: constraintTypeIds.map((constraintTypeId) => ({
@@ -166,56 +182,72 @@ export class CompositionRepository {
       }
 
       await tx.serviceOperation.deleteMany({
-        where: { compositionId, operationId: { notIn: keptOperationIds } },
+        where: {
+          compositionId,
+          composition: { tenantId },
+          operationId: { notIn: keptOperationIds },
+        },
       });
       for (const operation of operations) {
-        await tx.serviceOperation.upsert({
+        // `upsert` ne prend qu'une clé unique en `where`, qui ne porte pas le tenant :
+        // on écrit donc en `updateMany` filtré, et on ne crée que si rien n'a été touché.
+        const updated = await tx.serviceOperation.updateMany({
           where: {
-            compositionId_operationId: {
-              compositionId,
-              operationId: operation.operationId,
-            },
-          },
-          create: {
             compositionId,
             operationId: operation.operationId,
-            origin: operation.origin,
-            selected: operation.selected,
+            composition: { tenantId },
           },
-          update: { origin: operation.origin, selected: operation.selected },
+          data: { origin: operation.origin, selected: operation.selected },
         });
+        if (updated.count === 0) {
+          await tx.serviceOperation.create({
+            data: {
+              compositionId,
+              operationId: operation.operationId,
+              origin: operation.origin,
+              selected: operation.selected,
+            },
+          });
+        }
       }
 
-      // `updatedAt` ne bouge que si la prestation elle-même est touchée.
-      return tx.serviceComposition.update({
-        where: { id: compositionId },
-        data: {},
+      return tx.serviceComposition.findFirst({
+        where: { id: compositionId, tenantId },
         select: COMPOSITION_SELECT,
       });
     });
 
-    return toRecord(row);
+    return row ? toRecord(row) : null;
   }
 
-  /** FR-103 : ne touche que le choix du vendeur sur une opération déjà retenue. */
+  /**
+   * FR-103 : ne touche que le choix du vendeur sur une opération déjà retenue.
+   * Rend `null` si l'opération n'appartient pas à une prestation de ce tenant.
+   */
   async updateOperationSelection(
+    tenantId: string,
     compositionId: string,
     operationId: string,
     selected: boolean,
-  ): Promise<CompositionRecord> {
+  ): Promise<CompositionRecord | null> {
     const row = await this.prisma.$transaction(async (tx) => {
-      await tx.serviceOperation.update({
-        where: { compositionId_operationId: { compositionId, operationId } },
+      const updated = await tx.serviceOperation.updateMany({
+        where: { compositionId, operationId, composition: { tenantId } },
         data: { selected },
       });
+      if (updated.count === 0) return null;
 
-      return tx.serviceComposition.update({
-        where: { id: compositionId },
+      await tx.serviceComposition.updateMany({
+        where: { id: compositionId, tenantId },
         data: {},
+      });
+
+      return tx.serviceComposition.findFirst({
+        where: { id: compositionId, tenantId },
         select: COMPOSITION_SELECT,
       });
     });
 
-    return toRecord(row);
+    return row ? toRecord(row) : null;
   }
 }

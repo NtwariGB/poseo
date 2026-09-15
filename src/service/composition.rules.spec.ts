@@ -164,7 +164,7 @@ describe('CompositionRules.resolve', () => {
       expect(result.operations).toEqual([
         { operationId: 'op-waste', origin: 'OPTIONAL', selected: true },
       ]);
-      expect(result.removalWarnings).toEqual([]);
+      expect(result.differenceWarnings).toEqual([]);
     });
 
     it('conserve une optionnelle décochée', () => {
@@ -203,7 +203,7 @@ describe('CompositionRules.resolve', () => {
       );
 
       expect(result.operations).toEqual([]);
-      expect(result.removalWarnings).toEqual([
+      expect(result.differenceWarnings).toEqual([
         'OPERATION_REMOVED:WASTE_DISPOSAL',
       ]);
     });
@@ -218,7 +218,25 @@ describe('CompositionRules.resolve', () => {
         [{ operationId: 'op-waste', origin: 'OPTIONAL', selected: false }],
       );
 
-      expect(result.removalWarnings).toEqual([]);
+      expect(result.differenceWarnings).toEqual([]);
+    });
+
+    it('décoche et avertit quand une obligatoire devient optionnelle', () => {
+      const result = resolve(
+        [
+          rule('OFFER', 'op-waste'),
+          rule('REQUIRE', 'op-waste', CONSTRAINT_NO_ELEVATOR),
+        ],
+        [],
+        [{ operationId: 'op-waste', origin: 'MANDATORY', selected: true }],
+      );
+
+      expect(result.operations).toEqual([
+        { operationId: 'op-waste', origin: 'OPTIONAL', selected: false },
+      ]);
+      expect(result.differenceWarnings).toEqual([
+        'OPERATION_NOW_OPTIONAL:WASTE_DISPOSAL',
+      ]);
     });
 
     it('avertit quand une obligatoire disparaît avec la contrainte qui la déclenchait', () => {
@@ -229,7 +247,7 @@ describe('CompositionRules.resolve', () => {
       );
 
       expect(result.operations).toEqual([]);
-      expect(result.removalWarnings).toEqual([
+      expect(result.differenceWarnings).toEqual([
         'OPERATION_REMOVED:CARRY_UPSTAIRS',
       ]);
     });
@@ -242,7 +260,7 @@ describe('CompositionRules.resolve', () => {
       expect(result).toEqual({
         operations: [],
         catalogWarnings: [],
-        removalWarnings: [],
+        differenceWarnings: [],
       });
     });
 

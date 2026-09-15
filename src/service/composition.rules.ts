@@ -42,8 +42,8 @@ export interface ResolveCompositionResult {
   operations: CompositionOperationState[];
   /** Avertissements d'état : incohérences du catalogue, recalculables à toute lecture. */
   catalogWarnings: string[];
-  /** Avertissements de différence : opérations cochées perdues par cette recomposition. */
-  removalWarnings: string[];
+  /** Avertissements de différence : ce que cette recomposition change pour le vendeur. */
+  differenceWarnings: string[];
 }
 
 /**
@@ -108,17 +108,26 @@ export class CompositionRules {
     );
 
     const operations: CompositionOperationState[] = [];
+    const transitionWarnings: string[] = [];
     for (const operationId of new Set([...required, ...offered])) {
       if (forbidden.has(operationId)) continue;
 
       const mandatory = required.has(operationId);
+      const previous = previousById.get(operationId);
+
+      // Une obligatoire qui cesse de l'être n'a jamais été choisie par le vendeur :
+      // elle était cochée d'office. On la rend décochée et on le signale, plutôt que
+      // de lui laisser une option qu'il n'a pas retenue.
+      const becameOptional = !mandatory && previous?.origin === 'MANDATORY';
+      if (becameOptional) {
+        transitionWarnings.push(`OPERATION_NOW_OPTIONAL:${codeOf(operationId)}`);
+      }
+
       operations.push({
         operationId,
         origin: mandatory ? 'MANDATORY' : 'OPTIONAL',
         // Une obligatoire est toujours retenue ; une optionnelle garde le choix du vendeur.
-        selected: mandatory
-          ? true
-          : (previousById.get(operationId)?.selected ?? false),
+        selected: mandatory ? true : (!becameOptional && (previous?.selected ?? false)),
       });
     }
 
@@ -136,7 +145,10 @@ export class CompositionRules {
     return {
       operations,
       catalogWarnings: CompositionRules.mergeWarnings(catalogWarnings),
-      removalWarnings: CompositionRules.mergeWarnings(removalWarnings),
+      differenceWarnings: CompositionRules.mergeWarnings(
+        removalWarnings,
+        transitionWarnings,
+      ),
     };
   }
 }

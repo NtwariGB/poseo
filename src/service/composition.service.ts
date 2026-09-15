@@ -115,10 +115,19 @@ export class CompositionService {
     });
 
     const updated = await this.compositions.replaceConstraintsAndOperations(
+      tenantId,
       record.id,
       requested,
       resolved.operations,
     );
+    if (!updated) {
+      // La prestation a cessé d'appartenir à ce tenant entre la lecture et l'écriture :
+      // rien n'a été écrit, et on répond comme si elle n'existait pas (Q4).
+      throw new NotFoundError(
+        'COMPOSITION_NOT_FOUND',
+        `Prestation ${record.id} inconnue.`,
+      );
+    }
 
     const zone = await this.catalog.findZoneByPostalCode(
       tenantId,
@@ -127,7 +136,7 @@ export class CompositionService {
 
     return this.toView(updated, zone, [
       resolved.catalogWarnings,
-      resolved.removalWarnings,
+      resolved.differenceWarnings,
       this.zoneWarnings(zone),
     ]);
   }
@@ -165,10 +174,19 @@ export class CompositionService {
     }
 
     const updated = await this.compositions.updateOperationSelection(
+      tenantId,
       record.id,
       operationId,
       dto.selected,
     );
+    if (!updated) {
+      // L'opération a disparu de la prestation entre la lecture et l'écriture :
+      // rien n'a été écrit.
+      throw new NotFoundError(
+        'OPERATION_NOT_IN_COMPOSITION',
+        `Opération ${operationId} absente de la prestation.`,
+      );
+    }
 
     return this.read(tenantId, updated);
   }

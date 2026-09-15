@@ -85,6 +85,10 @@ prestation au besoin du client.
   unitairement.
 - Une opération à la fois FORBID et REQUIRE pour la même combinaison : FORBID gagne, et `warnings`
   contient `CATALOG_INCONSISTENT:<code>`.
+- Opération obligatoire qui redevient optionnelle à la recomposition (la contrainte qui la rendait
+  obligatoire est retirée, mais une règle OFFER la propose toujours) : elle repasse à
+  `selected = false` — elle était cochée d'office, jamais choisie par le vendeur — et `warnings`
+  contient `OPERATION_NOW_OPTIONAL:<code>`.
 - Type de produit : non modifiable après création. Pour changer de produit, on crée une nouvelle
   prestation (simplification, voir DECISIONS.md).
 
