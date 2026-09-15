@@ -69,7 +69,8 @@ qui est hors de notre périmètre.
 - Le vendeur change le type de produit après avoir coché des optionnelles : on recompose et on perd ce
   qui n'est plus valide, avec avertissement.
 - Adresse modifiée après émission : nouveau devis.
-- Contrainte ajoutée qui rend une opération interdite déjà cochée : rejet avec explication.
+- Contrainte ajoutée qui rend une opération interdite déjà cochée : l'option est retirée et signalée
+  par un avertissement `OPERATION_REMOVED`.
 - Grille de main d'œuvre modifiée pendant qu'une prestation est en brouillon : le prochain calcul prend
   la nouvelle grille.
 

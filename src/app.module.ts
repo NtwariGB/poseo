@@ -7,11 +7,13 @@ import {
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { CatalogModule } from './catalog/catalog.module';
 import { ValidationError } from './common/errors/validation-error';
 import { DomainErrorFilter } from './common/filters/domain-error.filter';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ServiceModule } from './service/service.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
 import { TenantModule } from './tenant/tenant.module';
 
@@ -21,6 +23,8 @@ import { TenantModule } from './tenant/tenant.module';
     PrismaModule,
     HealthModule,
     TenantModule,
+    CatalogModule,
+    ServiceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainErrorFilter },
