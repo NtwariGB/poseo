@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CatalogItemView } from '../catalog/catalog.view';
+import type { PrismaTransaction } from '../prisma/prisma-transaction';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CompositionOperationState,
@@ -218,6 +219,25 @@ export class CompositionRepository {
     });
 
     return row ? toRecord(row) : null;
+  }
+
+  /**
+   * Statut de la prestation, écrit dans la transaction du module `quote` (FR-201, FR-205) :
+   * le devis et le statut qu'il fait basculer sont commités ensemble ou pas du tout.
+   * Rend `false` si la prestation n'appartient pas au tenant, sans rien écrire.
+   */
+  async setStatus(
+    tx: PrismaTransaction,
+    tenantId: string,
+    compositionId: string,
+    status: CompositionStatusName,
+  ): Promise<boolean> {
+    const updated = await tx.serviceComposition.updateMany({
+      where: { id: compositionId, tenantId },
+      data: { status },
+    });
+
+    return updated.count > 0;
   }
 
   /**

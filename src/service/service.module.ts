@@ -8,5 +8,8 @@ import { CompositionService } from './composition.service';
   imports: [CatalogModule],
   controllers: [CompositionController],
   providers: [CompositionService, CompositionRepository],
+  // Le module `quote` recompose la prestation avant de la chiffrer (ADR 0019) et bascule
+  // son statut dans sa propre transaction (FR-201, FR-205).
+  exports: [CompositionService, CompositionRepository],
 })
 export class ServiceModule {}

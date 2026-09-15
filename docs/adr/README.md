@@ -26,3 +26,5 @@ développeur donne lieu à un nouvel ADR.
 | 0018 | 2026-09-15 | [Lot 2 réduit pour tenir en une soirée](0018-lot-2-reduit-pour-tenir-en-une-soiree.md) | accepté |
 | 0019 | 2026-09-15 | [L'émission du devis recompose la prestation](0019-emission-du-devis-recompose-la-prestation.md) | accepté |
 | 0020 | 2026-09-15 | [Contrats précisés par l'agent-tests (lot 2)](0020-contrats-precises-par-agent-tests-lot-2.md) | accepté |
+| 0021 | 2026-09-15 | [Arbitrages de l'agent-code (lot 2)](0021-arbitrages-de-l-agent-code-lot-2.md) | accepté |
+| 0022 | 2026-09-15 | [Le verrou de la prestation ne porte que sur ACCEPTED](0022-le-verrou-de-la-prestation-ne-porte-que-sur-accepted.md) | accepté |

@@ -13,6 +13,7 @@ import { DomainErrorFilter } from './common/filters/domain-error.filter';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QuoteModule } from './quote/quote.module';
 import { ServiceModule } from './service/service.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
 import { TenantModule } from './tenant/tenant.module';
@@ -25,6 +26,7 @@ import { TenantModule } from './tenant/tenant.module';
     TenantModule,
     CatalogModule,
     ServiceModule,
+    QuoteModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainErrorFilter },

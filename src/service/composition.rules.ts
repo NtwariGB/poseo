@@ -52,11 +52,13 @@ export interface ResolveCompositionResult {
  */
 export class CompositionRules {
   /**
-   * FR-110 : la prestation n'est modifiable qu'en brouillon. Une fois un devis émis,
-   * toute modification produit un nouveau devis, pas une mutation de la prestation.
+   * FR-110 : la prestation reste modifiable tant qu'aucun devis n'a été accepté. En
+   * `QUOTED`, la modifier est le parcours normal : elle produira un nouveau devis et
+   * l'ancien passera SUPERSEDED (règle métier 6). Seule l'acceptation fige définitivement
+   * la prestation (règle métier 8, ADR 0022).
    */
-  static assertDraft(status: CompositionStatusName): void {
-    if (status !== 'DRAFT') {
+  static assertModifiable(status: CompositionStatusName): void {
+    if (status === 'ACCEPTED') {
       throw new ConflictError(
         'COMPOSITION_LOCKED',
         `Prestation en statut ${status} : modification impossible.`,
