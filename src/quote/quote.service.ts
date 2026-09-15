@@ -6,6 +6,7 @@ import { InvariantViolationError } from '../common/errors/invariant-violation-er
 import { NotFoundError } from '../common/errors/not-found-error';
 import { OutboxWriter } from '../outbox/outbox.writer';
 import { CompositionRepository } from '../service/composition.repository';
+import { CompositionRules } from '../service/composition.rules';
 import { CompositionService } from '../service/composition.service';
 import { TenantRepository } from '../tenant/tenant.repository';
 import { PricingRules } from './pricing.rules';
@@ -49,13 +50,9 @@ export class QuoteService {
     );
     const composition = resolved.record;
 
-    // ADR 0021, Q2 : l'acceptation fige définitivement la prestation (règle métier 8).
-    if (composition.status === 'ACCEPTED') {
-      throw new ConflictError(
-        'COMPOSITION_LOCKED',
-        `Prestation en statut ${composition.status} : émission impossible.`,
-      );
-    }
+    // FR-212 : émettre est un mouvement de la prestation, il obéit au même verrou que sa
+    // modification. La règle vit dans la classe pure, pas en double ici (ADR 0023).
+    CompositionRules.assertModifiable(composition.status);
 
     const issuedAt = new Date();
 
@@ -149,6 +146,7 @@ export class QuoteService {
         tenantId,
         composition.id,
         'QUOTED',
+        issuedAt,
       );
       if (!touched) {
         throw new NotFoundError(
@@ -214,6 +212,25 @@ export class QuoteService {
       );
     }
 
+    // FR-216 : la prestation a bougé depuis l'émission, le devis ne la décrit plus. On
+    // refuse plutôt que de figer une prestation ACCEPTED sur un devis divergent (ADR 0023).
+    const updatedAt = await this.compositionRepository.findUpdatedAt(
+      tenantId,
+      quote.compositionId,
+    );
+    if (!updatedAt) {
+      throw new NotFoundError(
+        'COMPOSITION_NOT_FOUND',
+        `Prestation ${quote.compositionId} inconnue.`,
+      );
+    }
+    if (updatedAt.getTime() > quote.issuedAt.getTime()) {
+      throw new ConflictError(
+        'QUOTE_STALE',
+        `Devis ${quote.number} : la prestation a été modifiée depuis l'émission, il faut réémettre.`,
+      );
+    }
+
     const accepted = await this.quotes.transaction(async (tx) => {
       const updated = await this.quotes.acceptIssued(
         tx,
@@ -237,6 +254,7 @@ export class QuoteService {
         tenantId,
         updated.compositionId,
         'ACCEPTED',
+        acceptedAt,
       );
       if (!touched) {
         throw new NotFoundError(

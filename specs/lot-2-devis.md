@@ -44,6 +44,11 @@ En tant que vendeur, je veux émettre un devis à partir d'une prestation, afin 
    (le test crée le devis puis modifie `validUntil` en base via Prisma).
 4. **Étant donné** une prestation ACCEPTED, **quand** je modifie ses contraintes ou ses options,
    **alors** 409 `COMPOSITION_LOCKED`.
+5. **Étant donné** un devis ISSUED dont la prestation a été modifiée depuis l'émission,
+   **quand** j'accepte, **alors** 409 `QUOTE_STALE`, le devis reste ISSUED et la prestation
+   reste QUOTED (FR-216).
+6. **Étant donné** une prestation ACCEPTED, **quand** j'émets un nouveau devis, **alors** 409
+   `COMPOSITION_LOCKED` et aucun devis n'est créé (FR-212).
 
 ### Story 4 : événements sortants (P1)
 
@@ -85,6 +90,27 @@ laborCents, surchargeCents, subtotalCents, vatRateBp, vatCents, totalCents }`.
   alphabétique), lignes SURCHARGE ensuite (ADR 0020).
 - **FR-211** : `GET /compositions/:id/quotes` sur une prestation d'un autre tenant renvoie 404
   `COMPOSITION_NOT_FOUND`, comme l'émission. Jamais 403, jamais 200 avec liste vide (ADR 0020).
+- **FR-212** : `POST /compositions/:id/quotes` sur une prestation `ACCEPTED` renvoie 409
+  `COMPOSITION_LOCKED` : l'acceptation fige la prestation (règle métier 8). Le contrôle passe
+  par `CompositionRules.assertModifiable`, la même règle pure que la modification (ADR 0021 Q2,
+  ADR 0023).
+- **FR-213** : si la zone de la prestation n'a aucun taux en vigueur à l'instant de l'émission
+  (`validFrom <= issuedAt`), l'émission renvoie 422 `LABOR_RATE_NOT_FOUND` et n'écrit rien
+  (ADR 0021, point 7).
+- **FR-214** : à l'émission, les contrôles s'enchaînent dans cet ordre : verrou de la prestation
+  (FR-212), puis zone (`ZONE_NOT_COVERED`), puis taux (FR-213), puis calcul
+  (`NOTHING_TO_QUOTE`). `ZONE_NOT_COVERED` prime donc sur `NOTHING_TO_QUOTE` : hors zone, la
+  prestation n'est pas chiffrable, quelle que soit sa composition (ADR 0021, point 6).
+- **FR-215** : un identifiant de devis mal formé (non-UUID) sur `GET /quotes/:id` ou
+  `POST /quotes/:id/accept` renvoie 404 `QUOTE_NOT_FOUND`, comme un identifiant inconnu : on ne
+  distingue jamais « mal formé », « inconnu » et « pas à vous » (ADR 0021, point 4).
+- **FR-216** : `POST /quotes/:id/accept` renvoie 409 `QUOTE_STALE` si la prestation a été
+  modifiée depuis l'émission du devis (`ServiceComposition.updatedAt > Quote.issuedAt`). Rien
+  n'est écrit : le devis reste `ISSUED`, la prestation reste `QUOTED`, et le vendeur doit
+  réémettre. L'émission fige `updatedAt` sur `issuedAt` pour que le devis qu'elle produit ne
+  se rende pas périmé lui-même. Les contrôles d'acceptation s'enchaînent dans cet ordre :
+  statut (`QUOTE_NOT_ACCEPTABLE`), validité (`QUOTE_EXPIRED`), fraîcheur (`QUOTE_STALE`)
+  (ADR 0023).
 
 ## Entités concernées
 

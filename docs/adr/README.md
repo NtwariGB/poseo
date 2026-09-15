@@ -28,3 +28,4 @@ développeur donne lieu à un nouvel ADR.
 | 0020 | 2026-09-15 | [Contrats précisés par l'agent-tests (lot 2)](0020-contrats-precises-par-agent-tests-lot-2.md) | accepté |
 | 0021 | 2026-09-15 | [Arbitrages de l'agent-code (lot 2)](0021-arbitrages-de-l-agent-code-lot-2.md) | accepté |
 | 0022 | 2026-09-15 | [Le verrou de la prestation ne porte que sur ACCEPTED](0022-le-verrou-de-la-prestation-ne-porte-que-sur-accepted.md) | accepté |
+| 0023 | 2026-09-15 | [Acceptation refusée si la prestation a bougé depuis l'émission](0023-acceptation-refusee-si-la-prestation-a-bouge.md) | accepté |

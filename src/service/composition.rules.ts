@@ -56,6 +56,9 @@ export class CompositionRules {
    * `QUOTED`, la modifier est le parcours normal : elle produira un nouveau devis et
    * l'ancien passera SUPERSEDED (règle métier 6). Seule l'acceptation fige définitivement
    * la prestation (règle métier 8, ADR 0022).
+   *
+   * Émettre un devis est un mouvement de la prestation au même titre : FR-212 passe par
+   * cette règle plutôt que de la redire (ADR 0023).
    */
   static assertModifiable(status: CompositionStatusName): void {
     if (status === 'ACCEPTED') {
