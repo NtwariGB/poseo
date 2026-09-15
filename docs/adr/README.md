@@ -23,3 +23,6 @@ développeur donne lieu à un nouvel ADR.
 | 0015 | 2026-09-12 | [Contrats précisés par l'agent-tests (lot 1)](0015-contrats-precises-par-agent-tests-lot-1.md) | accepté |
 | 0016 | 2026-09-12 | [Arbitrages du lot 1 (catalogue et composition)](0016-arbitrages-du-lot-1-catalogue-et-composition.md) | accepté |
 | 0017 | 2026-09-12 | [Suites de la revue du lot 1](0017-suites-de-la-revue-du-lot-1.md) | accepté |
+| 0018 | 2026-09-15 | [Lot 2 réduit pour tenir en une soirée](0018-lot-2-reduit-pour-tenir-en-une-soiree.md) | accepté |
+| 0019 | 2026-09-15 | [L'émission du devis recompose la prestation](0019-emission-du-devis-recompose-la-prestation.md) | accepté |
+| 0020 | 2026-09-15 | [Contrats précisés par l'agent-tests (lot 2)](0020-contrats-precises-par-agent-tests-lot-2.md) | accepté |

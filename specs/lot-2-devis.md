@@ -62,6 +62,9 @@ En tant que vendeur, je veux émettre un devis à partir d'une prestation, afin 
 - **FR-202** : calcul dans une classe pure `PricingRules` (`src/quote/pricing.rules.ts`), sans Prisma,
   selon la section 5 de `01-modele-domaine.md`. Tests unitaires : arrondis, pourcentage, montant fixe,
   plusieurs majorations, aucune opération sélectionnée (422 `NOTHING_TO_QUOTE`).
+  Le cumul de majorations est couvert par ces tests unitaires seulement, pas en e2e : le seed n'a
+  qu'une règle SURCHARGE par type de produit et le catalogue n'a pas d'API d'administration
+  (ADR 0013, ADR 0020).
 - **FR-203** : numérotation par `QuoteCounter` avec `SELECT ... FOR UPDATE` (via `$queryRaw` dans la
   transaction), format `Q-<année>-<6 chiffres>`.
 - **FR-204** : `GET /quotes/:id`, `GET /compositions/:id/quotes`.
@@ -75,6 +78,13 @@ En tant que vendeur, je veux émettre un devis à partir d'une prestation, afin 
   `{ id, number, status, issuedAt, validUntil, acceptedAt, compositionId, productTypeLabel, zoneCode,
 hourlyRateCents, lines: [{ position, kind, label, durationMinutes, hourlyRateCents, amountCents }],
 laborCents, surchargeCents, subtotalCents, vatRateBp, vatCents, totalCents }`.
+- **FR-209** : `QuoteLine.label` est un snapshot. Pour une ligne OPERATION c'est `Operation.label`
+  du catalogue, pour une ligne SURCHARGE c'est `CompositionRule.label` (ADR 0020).
+- **FR-210** : les `position` vont de 1 à n dans un ordre déterministe calculé à l'émission :
+  lignes OPERATION d'abord (origin MANDATORY avant OPTIONAL, puis `Operation.code` en ordre
+  alphabétique), lignes SURCHARGE ensuite (ADR 0020).
+- **FR-211** : `GET /compositions/:id/quotes` sur une prestation d'un autre tenant renvoie 404
+  `COMPOSITION_NOT_FOUND`, comme l'émission. Jamais 403, jamais 200 avec liste vide (ADR 0020).
 
 ## Entités concernées
 
