@@ -322,17 +322,19 @@ describe('CompositionRules.resolve', () => {
   });
 });
 
-describe('CompositionRules.assertDraft (FR-110)', () => {
+describe('CompositionRules.assertModifiable (FR-110)', () => {
   it('laisse passer une prestation en brouillon', () => {
-    expect(() => CompositionRules.assertDraft('DRAFT')).not.toThrow();
+    expect(() => CompositionRules.assertModifiable('DRAFT')).not.toThrow();
   });
 
-  it('refuse une prestation déjà devisée', () => {
-    expect(() => CompositionRules.assertDraft('QUOTED')).toThrow(ConflictError);
+  it('laisse passer une prestation devisée', () => {
+    // Règle métier 6 : modifier après émission est le parcours normal, il produira un
+    // nouveau devis et fera passer l'ancien SUPERSEDED (ADR 0022).
+    expect(() => CompositionRules.assertModifiable('QUOTED')).not.toThrow();
   });
 
   it('refuse une prestation acceptée', () => {
-    expect(() => CompositionRules.assertDraft('ACCEPTED')).toThrow(
+    expect(() => CompositionRules.assertModifiable('ACCEPTED')).toThrow(
       ConflictError,
     );
   });
@@ -340,7 +342,7 @@ describe('CompositionRules.assertDraft (FR-110)', () => {
   it('porte le code COMPOSITION_LOCKED et le statut 409', () => {
     let caught: ConflictError | undefined;
     try {
-      CompositionRules.assertDraft('ACCEPTED');
+      CompositionRules.assertModifiable('ACCEPTED');
     } catch (error) {
       caught = error as ConflictError;
     }

@@ -4,7 +4,7 @@ import {
   CatalogRepository,
   CompositionRuleRow,
 } from '../catalog/catalog.repository';
-import { CatalogItemView } from '../catalog/catalog.view';
+import { CatalogItemView, OperationCatalogView } from '../catalog/catalog.view';
 import { InvariantViolationError } from '../common/errors/invariant-violation-error';
 import { NotFoundError } from '../common/errors/not-found-error';
 import {
@@ -12,16 +12,32 @@ import {
   CompositionRecord,
 } from './composition.repository';
 import { CompositionRules, ZONE_NOT_COVERED } from './composition.rules';
-import { buildCompositionView, CompositionView } from './composition.view';
+import {
+  buildCompositionView,
+  CompositionOperationView,
+  CompositionView,
+} from './composition.view';
 import { CreateCompositionDto } from './dto/create-composition.dto';
 import { ReplaceConstraintsDto } from './dto/replace-constraints.dto';
 import { SelectOperationDto } from './dto/select-operation.dto';
 
 /** Ce que le référentiel apporte au moteur de règles pour un type de produit donné. */
 interface CompositionContext {
+  /** Opérations du tenant, pour trier, libeller les avertissements et chiffrer. */
+  operationsById: Map<string, OperationCatalogView>;
   /** Codes métier des opérations du tenant, pour trier et libeller les avertissements. */
   operationCodesById: Map<string, string>;
   rules: CompositionRuleRow[];
+}
+
+/**
+ * Prestation recomposée avec les règles courantes, telle que l'émission la chiffre (ADR 0019).
+ * Les opérations rendues ne sont pas celles stockées : elles sont recalculées, sans être
+ * réécrites en base (ADR 0021, Q1).
+ */
+export interface ResolvedComposition {
+  record: CompositionRecord;
+  operations: CompositionOperationView[];
 }
 
 /**
@@ -90,7 +106,7 @@ export class CompositionService {
     dto: ReplaceConstraintsDto,
   ): Promise<CompositionView> {
     const record = await this.load(tenantId, compositionId);
-    CompositionRules.assertDraft(record.status);
+    CompositionRules.assertModifiable(record.status);
 
     const requested = [...new Set(dto.constraintTypeIds)];
     const constraintTypes = await this.catalog.findConstraintTypesByIds(
@@ -149,7 +165,7 @@ export class CompositionService {
     dto: SelectOperationDto,
   ): Promise<CompositionView> {
     const record = await this.load(tenantId, compositionId);
-    CompositionRules.assertDraft(record.status);
+    CompositionRules.assertModifiable(record.status);
 
     const operation = record.operations.find(
       (candidate) => candidate.operationId === operationId,
@@ -189,6 +205,52 @@ export class CompositionService {
     }
 
     return this.read(tenantId, updated);
+  }
+
+  /**
+   * ADR 0019 : état de la prestation rejoué avec les règles du catalogue à cet instant, pour
+   * que le devis reflète le catalogue du moment. Rien n'est réécrit sur la prestation
+   * (ADR 0021, Q1) : le devis est la photographie, la prestation reste le brouillon.
+   */
+  async resolveForQuote(
+    tenantId: string,
+    compositionId: string,
+  ): Promise<ResolvedComposition> {
+    const record = await this.load(tenantId, compositionId);
+    const context = await this.loadContext(tenantId, record.productTypeId);
+
+    const resolved = CompositionRules.resolve({
+      rules: context.rules,
+      declaredConstraintTypeIds: record.constraints.map(
+        (constraint) => constraint.id,
+      ),
+      currentOperations: record.operations,
+      operationCodesById: context.operationCodesById,
+    });
+
+    return {
+      record,
+      operations: resolved.operations.map((operation) => {
+        const catalogEntry = context.operationsById.get(operation.operationId);
+        if (!catalogEntry) {
+          // Une règle référence une opération d'un autre tenant : incohérence de catalogue,
+          // on refuse de chiffrer plutôt que d'inventer une durée.
+          throw new InvariantViolationError(
+            'CATALOG_INCONSISTENT',
+            `Opération ${operation.operationId} absente du catalogue du tenant.`,
+          );
+        }
+
+        return {
+          operationId: operation.operationId,
+          code: catalogEntry.code,
+          label: catalogEntry.label,
+          referenceDurationMinutes: catalogEntry.referenceDurationMinutes,
+          origin: operation.origin,
+          selected: operation.selected,
+        };
+      }),
+    };
   }
 
   /** FR-104 : la prestation telle qu'elle est stockée, ses avertissements d'état recalculés. */
@@ -258,6 +320,9 @@ export class CompositionService {
     ]);
 
     return {
+      operationsById: new Map(
+        operations.map((operation) => [operation.id, operation]),
+      ),
       operationCodesById: new Map(
         operations.map((operation) => [operation.id, operation.code]),
       ),

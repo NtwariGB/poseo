@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CatalogItemView } from '../catalog/catalog.view';
+import type { PrismaTransaction } from '../prisma/prisma-transaction';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CompositionOperationState,
@@ -162,10 +163,12 @@ export class CompositionRepository {
     const row = await this.prisma.$transaction(async (tx) => {
       // Touche la prestation et prouve son appartenance d'un même geste : sans ligne
       // touchée, rien n'est écrit derrière.
-      // `updatedAt` ne bouge que si la prestation elle-même est touchée.
+      // `updatedAt` est écrit explicitement : sur un `data` vide, Prisma n'émet aucun SET
+      // et la colonne `@updatedAt` ne bouge pas. Or c'est elle qui date la prestation face
+      // au devis qui la chiffre (FR-216, ADR 0023).
       const touched = await tx.serviceComposition.updateMany({
         where: { id: compositionId, tenantId },
-        data: {},
+        data: { updatedAt: new Date() },
       });
       if (touched.count === 0) return null;
 
@@ -221,6 +224,43 @@ export class CompositionRepository {
   }
 
   /**
+   * Statut de la prestation, écrit dans la transaction du module `quote` (FR-201, FR-205) :
+   * le devis et le statut qu'il fait basculer sont commités ensemble ou pas du tout.
+   * Rend `false` si la prestation n'appartient pas au tenant, sans rien écrire.
+   *
+   * `at` fige `updatedAt` sur l'instant du devis au lieu de l'instant de l'écriture
+   * (ADR 0023) : `updatedAt` date le dernier mouvement de la prestation, et le devis qui
+   * la photographie à cet instant ne se rend pas périmé lui-même.
+   */
+  async setStatus(
+    tx: PrismaTransaction,
+    tenantId: string,
+    compositionId: string,
+    status: CompositionStatusName,
+    at: Date,
+  ): Promise<boolean> {
+    const updated = await tx.serviceComposition.updateMany({
+      where: { id: compositionId, tenantId },
+      data: { status, updatedAt: at },
+    });
+
+    return updated.count > 0;
+  }
+
+  /**
+   * ADR 0023 : instant de la dernière modification de la prestation, pour comparer un devis
+   * à la prestation qu'il chiffre. `null` si elle n'appartient pas (ou plus) au tenant.
+   */
+  async findUpdatedAt(tenantId: string, id: string): Promise<Date | null> {
+    const row = await this.prisma.serviceComposition.findFirst({
+      where: { tenantId, id },
+      select: { updatedAt: true },
+    });
+
+    return row?.updatedAt ?? null;
+  }
+
+  /**
    * FR-103 : ne touche que le choix du vendeur sur une opération déjà retenue.
    * Rend `null` si l'opération n'appartient pas à une prestation de ce tenant.
    */
@@ -237,9 +277,11 @@ export class CompositionRepository {
       });
       if (updated.count === 0) return null;
 
+      // Le choix du vendeur porte sur une ligne fille : la prestation est datée à part,
+      // sans quoi `updatedAt` ignorerait la modification (FR-216, ADR 0023).
       await tx.serviceComposition.updateMany({
         where: { id: compositionId, tenantId },
-        data: {},
+        data: { updatedAt: new Date() },
       });
 
       return tx.serviceComposition.findFirst({

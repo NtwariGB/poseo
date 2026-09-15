@@ -4,10 +4,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { AppModule } from '../src/app.module';
 import { CompositionRepository } from '../src/service/composition.repository';
+import { QuoteRepository } from '../src/quote/quote.repository';
 
 // Test de non-régression du filtrage `tenantId` sur les écritures de la prestation
-// (revue du lot 1, écart n° 1). Il attaque le repository directement, sans passer par
-// le service : c'est justement le contrôle que le service faisait à sa place.
+// (revue du lot 1, écart n° 1) et du devis (revue du lot 2, écart n° 6). Il attaque les
+// repositories directement, sans passer par le service : c'est justement le contrôle que
+// le service faisait à leur place.
 // Client Prisma propre au test, indépendant de celui de l'application.
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -16,9 +18,10 @@ const prisma = new PrismaClient({
 const OWNER_TENANT_CODE = 'TEST-ISO-OWNER';
 const INTRUDER_TENANT_CODE = 'TEST-ISO-INTRUDER';
 
-describe('Isolation multi-tenant des écritures de prestation', () => {
+describe('Isolation multi-tenant des écritures de prestation et de devis', () => {
   let moduleRef: TestingModule;
   let repository: CompositionRepository;
+  let quotes: QuoteRepository;
 
   let ownerTenantId: string;
   let intruderTenantId: string;
@@ -26,6 +29,7 @@ describe('Isolation multi-tenant des écritures de prestation', () => {
   let mandatoryOperationId: string;
   let optionalOperationId: string;
   let constraintTypeId: string;
+  let quoteId: string;
 
   /** État complet des lignes écrites par la prestation, pour prouver qu'elles ne bougent pas. */
   const snapshot = async () => {
@@ -47,10 +51,50 @@ describe('Isolation multi-tenant des écritures de prestation', () => {
     return { composition, operations, constraints };
   };
 
+  /** État des devis du tenant propriétaire, pour prouver qu'aucun ne bouge. */
+  const quoteSnapshot = async () =>
+    prisma.quote.findMany({
+      where: { compositionId },
+      select: { id: true, tenantId: true, number: true, status: true, acceptedAt: true },
+      orderBy: { number: 'asc' },
+    });
+
+  /** Devis figé du tenant propriétaire, écrit par le repository lui-même. */
+  const insertQuote = (number: string) =>
+    quotes.transaction((tx) =>
+      quotes.insert(tx, {
+        tenantId: ownerTenantId,
+        compositionId,
+        number,
+        issuedAt: new Date('2026-09-15T10:00:00.000Z'),
+        validUntil: new Date('2026-10-15T10:00:00.000Z'),
+        zoneCode: 'ISO_ZONE',
+        hourlyRateCents: 4000,
+        productTypeLabel: 'Produit de test',
+        laborCents: 4000,
+        surchargeCents: 0,
+        subtotalCents: 4000,
+        vatRateBp: 2000,
+        vatCents: 800,
+        totalCents: 4800,
+        lines: [
+          {
+            position: 1,
+            kind: 'OPERATION',
+            label: 'Pose de test',
+            durationMinutes: 60,
+            hourlyRateCents: 4000,
+            amountCents: 4000,
+          },
+        ],
+      }),
+    );
+
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     await moduleRef.init();
     repository = moduleRef.get(CompositionRepository, { strict: false });
+    quotes = moduleRef.get(QuoteRepository, { strict: false });
 
     const tenantData = {
       name: 'Enseigne de test (isolation)',
@@ -106,6 +150,9 @@ describe('Isolation multi-tenant des écritures de prestation', () => {
       ],
     });
     compositionId = record.id;
+
+    // Devis ISSUED du tenant propriétaire : cible des écritures du module devis.
+    quoteId = (await insertQuote('Q-ISO-000001')).id;
   }, 60_000);
 
   afterAll(async () => {
@@ -118,6 +165,16 @@ describe('Isolation multi-tenant des écritures de prestation', () => {
         select: { id: true },
       })
     ).map((composition) => composition.id);
+
+    const quoteIds = (
+      await prisma.quote.findMany({
+        where: { tenantId: { in: tenantIds } },
+        select: { id: true },
+      })
+    ).map((quote) => quote.id);
+    await prisma.quoteLine.deleteMany({ where: { quoteId: { in: quoteIds } } });
+    await prisma.quote.deleteMany({ where: { id: { in: quoteIds } } });
+    await prisma.quoteCounter.deleteMany({ where: { tenantId: { in: tenantIds } } });
 
     await prisma.serviceOperation.deleteMany({ where: { compositionId: { in: compositionIds } } });
     await prisma.serviceConstraint.deleteMany({ where: { compositionId: { in: compositionIds } } });
@@ -181,5 +238,92 @@ describe('Isolation multi-tenant des écritures de prestation', () => {
       updated?.operations.find((operation) => operation.operationId === optionalOperationId)
         ?.selected,
     ).toBe(false);
+  });
+
+  // Écritures ajoutées par le lot 2 (revue du lot 2, écart n° 6). `setStatus` appartient au
+  // repository de la prestation mais n'est appelé que par le module devis ; les écritures de
+  // `QuoteRepository` sont toutes filtrées sur le tenant.
+
+  it('setStatus sous un autre tenant ne touche aucune ligne', async () => {
+    const before = await snapshot();
+
+    const touched = await quotes.transaction((tx) =>
+      repository.setStatus(tx, intruderTenantId, compositionId, 'ACCEPTED', new Date()),
+    );
+
+    expect(touched).toBe(false);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('supersedeIssued sous un autre tenant ne touche aucun devis', async () => {
+    const before = await quoteSnapshot();
+
+    const superseded = await quotes.transaction((tx) =>
+      quotes.supersedeIssued(tx, intruderTenantId, compositionId),
+    );
+
+    expect(superseded).toBeNull();
+    expect(await quoteSnapshot()).toEqual(before);
+  });
+
+  it('acceptIssued sous un autre tenant ne touche aucun devis', async () => {
+    const before = await quoteSnapshot();
+
+    const accepted = await quotes.transaction((tx) =>
+      quotes.acceptIssued(tx, intruderTenantId, quoteId, new Date()),
+    );
+
+    expect(accepted).toBeNull();
+    expect(await quoteSnapshot()).toEqual(before);
+  });
+
+  it('findForTenant et listForComposition ne rendent rien à un autre tenant', async () => {
+    expect(await quotes.findForTenant(intruderTenantId, quoteId)).toBeNull();
+    expect(await quotes.listForComposition(intruderTenantId, compositionId)).toEqual([]);
+  });
+
+  it('nextNumber tient un compteur par tenant', async () => {
+    const year = 2099;
+
+    const ownerFirst = await quotes.transaction((tx) =>
+      quotes.nextNumber(tx, ownerTenantId, year),
+    );
+    const ownerSecond = await quotes.transaction((tx) =>
+      quotes.nextNumber(tx, ownerTenantId, year),
+    );
+    const intruderFirst = await quotes.transaction((tx) =>
+      quotes.nextNumber(tx, intruderTenantId, year),
+    );
+
+    expect(ownerFirst).toBe(`Q-${year}-000001`);
+    expect(ownerSecond).toBe(`Q-${year}-000002`);
+    // Le compteur de l'intrus n'a pas hérité de la séquence du propriétaire.
+    expect(intruderFirst).toBe(`Q-${year}-000001`);
+  });
+
+  // Témoin : sans lui, les quatre tests ci-dessus passeraient même si plus rien n'écrivait.
+  it('les mêmes écritures sous le tenant propriétaire aboutissent', async () => {
+    const touched = await quotes.transaction((tx) =>
+      repository.setStatus(tx, ownerTenantId, compositionId, 'QUOTED', new Date()),
+    );
+    expect(touched).toBe(true);
+    expect((await snapshot()).composition.status).toBe('QUOTED');
+
+    const superseded = await quotes.transaction((tx) =>
+      quotes.supersedeIssued(tx, ownerTenantId, compositionId),
+    );
+    expect(superseded?.id).toBe(quoteId);
+    expect(superseded?.status).toBe('SUPERSEDED');
+
+    const second = await insertQuote('Q-ISO-000002');
+    const acceptedAt = new Date();
+    const accepted = await quotes.transaction((tx) =>
+      quotes.acceptIssued(tx, ownerTenantId, second.id, acceptedAt),
+    );
+    expect(accepted?.status).toBe('ACCEPTED');
+    expect(accepted?.acceptedAt).toEqual(acceptedAt);
+
+    expect(await quotes.findForTenant(ownerTenantId, quoteId)).not.toBeNull();
+    expect(await quotes.listForComposition(ownerTenantId, compositionId)).toHaveLength(2);
   });
 });

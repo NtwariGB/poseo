@@ -80,9 +80,10 @@ prestation au besoin du client.
 
 ## Cas limites
 
-- Prestation en statut autre que `DRAFT` : toute modification (contraintes, options) renvoie 409
+- Prestation `ACCEPTED` : toute modification (contraintes, options) renvoie 409
   `COMPOSITION_LOCKED`. Non déclenchable dans ce lot (aucun devis), mais la règle est codée et testée
-  unitairement.
+  unitairement. Une prestation `QUOTED` reste modifiable : la modifier produira un nouveau devis et
+  fera passer l'ancien SUPERSEDED (règle métier 6). Corrigé au lot 2, voir ADR 0022.
 - Une opération à la fois FORBID et REQUIRE pour la même combinaison : FORBID gagne, et `warnings`
   contient `CATALOG_INCONSISTENT:<code>`.
 - Opération obligatoire qui redevient optionnelle à la recomposition (la contrainte qui la rendait
@@ -112,7 +113,8 @@ zone: { id, code, label } | null, constraints: [{ id, code, label }],
 operations: [{ operationId, code, label, referenceDurationMinutes, origin, selected }], warnings: string[] }`.
 - **FR-109** : script `npm run seed` (`prisma/seed.ts`) idempotent, qui crée le tenant `LM-FR`
   (TVA 2000 bp, validité 30 jours) et le catalogue décrit ci-dessous. Relançable sans doublon.
-- **FR-110** : toute écriture (FR-101 à FR-103) est refusée si `status != DRAFT` (409).
+- **FR-110** : toute écriture (FR-101 à FR-103) est refusée si `status == ACCEPTED` (409
+  `COMPOSITION_LOCKED`). `DRAFT` et `QUOTED` restent modifiables (ADR 0022).
 
 - **FR-111** : `PUT /compositions/:id/constraints` et `PATCH /compositions/:id/operations/:operationId`
   répondent 200 avec la représentation FR-108 complète et à jour.

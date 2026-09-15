@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SurchargeRuleInput } from '../quote/pricing.rules';
 import { CatalogItemView, OperationCatalogView } from './catalog.view';
 
 /** Règle de composition telle que lue en base, réduite à ce dont le moteur a besoin. */
@@ -90,5 +91,42 @@ export class CatalogRepository {
       where: { tenantId, productTypeId },
       select: { kind: true, operationId: true, constraintTypeId: true },
     });
+  }
+
+  /**
+   * Règles de majoration du type de produit (FR-202). Comme pour les opérations, elles sont
+   * toutes rendues et le filtrage par contrainte déclarée revient au calcul pur.
+   */
+  findSurchargeRules(
+    tenantId: string,
+    productTypeId: string,
+  ): Promise<SurchargeRuleInput[]> {
+    return this.prisma.compositionRule.findMany({
+      where: { tenantId, productTypeId, kind: 'SURCHARGE' },
+      select: {
+        label: true,
+        constraintTypeId: true,
+        surchargePercentBp: true,
+        surchargeCents: true,
+      },
+    });
+  }
+
+  /**
+   * Taux applicable à une zone à l'instant `at` : le plus grand `validFrom <= at`
+   * (règle métier 9). `null` si la zone n'a aucun taux en vigueur.
+   */
+  async findApplicableLaborRate(
+    tenantId: string,
+    zoneId: string,
+    at: Date,
+  ): Promise<number | null> {
+    const rate = await this.prisma.laborRate.findFirst({
+      where: { tenantId, zoneId, validFrom: { lte: at } },
+      orderBy: { validFrom: 'desc' },
+      select: { hourlyRateCents: true },
+    });
+
+    return rate?.hourlyRateCents ?? null;
   }
 }

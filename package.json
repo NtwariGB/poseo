@@ -15,6 +15,7 @@
     "start:prod": "node dist/main",
     "lint": "oxlint src/ test/",
     "seed": "ts-node -r ./scripts/resolve-ts-js-imports.js prisma/seed.ts",
+    "consume": "ts-node scripts/consume.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
