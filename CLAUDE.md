@@ -11,7 +11,8 @@ il est représenté par un consommateur Kafka de démonstration.
 - `prisma/schema.prisma` : modèle de données contractuel, dérivé du précédent.
 - `specs/lot-N-*.md` : spec du lot en cours.
 - `specs/reviews/lot-N.md` : rapport de revue du lot.
-- `DECISIONS.md` : journal des arbitrages. Toute décision y est tracée avec date et raison.
+- `docs/adr/` : journal des décisions d'architecture, un fichier ADR numéroté par décision.
+  Index dans `docs/adr/README.md`. Toute décision y est tracée avec date et raison.
 - `specs/TEMPLATE-lot.md` : gabarit obligatoire de toute spec de lot.
 
 ## Méthode (non négociable)
@@ -19,7 +20,7 @@ il est représenté par un consommateur Kafka de démonstration.
 1. Lire le périmètre, le modèle de domaine et la spec du lot avant d'écrire du code.
 2. Ne rien implémenter hors du périmètre du lot demandé, même si cela semble utile.
 3. Toute question non tranchée par la spec est remontée au développeur AVANT implémentation.
-   Ne jamais trancher seul. Une fois tranchée, la décision est ajoutée à `DECISIONS.md`.
+   Ne jamais trancher seul. Une fois tranchée, la décision fait l'objet d'un nouvel ADR dans `docs/adr/`.
 4. Les tests écrits par le développeur définissent le résultat attendu. Ne pas les modifier
    ni les supprimer sans accord explicite. Si un test semble contredire la spec, le signaler.
 5. Le schéma Prisma est contractuel : tout écart nécessaire est une question remontée.
@@ -38,7 +39,7 @@ il est représenté par un consommateur Kafka de démonstration.
 - Erreurs métier : classe `DomainError` et sous-classes, converties en HTTP par un filtre global.
 - Multi-tenant : chaque requête porte l'en-tête `X-Tenant-Id`. Toute requête Prisma filtre
   sur `tenantId`. Un tenant ne voit jamais les données d'un autre. Pas d'authentification
-  (simplification assumée, voir DECISIONS.md).
+  (simplification assumée, voir `docs/adr/`).
 - Événements : jamais de producteur Kafka dans l'application. On écrit une ligne dans
   `outbox_event` dans la même transaction Prisma que l'écriture métier. Debezium capte la ligne
   et publie sur le topic `poseo.<aggregatetype>`, clé = `aggregateid`, en-tête `eventType` = `type`.

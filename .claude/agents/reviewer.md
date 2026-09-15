@@ -22,6 +22,6 @@ Axe 2, standards du CLAUDE.md :
 
 - Règle métier dans un contrôleur, accès Prisma hors repository, requête sans filtre tenantId.
 - Nommage, erreurs typées, TypeScript strict.
-- Dépendances ajoutées ou retirées, et leur justification dans DECISIONS.md.
+- Dépendances ajoutées ou retirées, et leur justification dans un ADR de `docs/adr/`.
 
 Termine par une liste d'écarts classés bloquant / à corriger / remarque, et un verdict : mergeable ou non.
