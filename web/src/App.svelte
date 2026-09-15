@@ -15,6 +15,7 @@
   const envTenantId: string = import.meta.env.VITE_TENANT_ID ?? '';
 
   let tenantId = $state(envTenantId);
+  let tenantCode = $state<string | null>(null);
   let tenantInput = $state('');
   let catalogLoaded = $state(false);
 
@@ -43,6 +44,7 @@
   /** UI-302 : le tenant est résolu une fois, puis le catalogue est chargé. */
   async function resolveTenant(value: string): Promise<void> {
     tenantError = null;
+    tenantCode = null;
     api.setTenantId(value);
     try {
       [productTypes, constraintTypes] = await Promise.all([
@@ -51,6 +53,12 @@
       ]);
       tenantId = value;
       catalogLoaded = true;
+      try {
+        tenantCode = (await api.getCurrentTenant()).code;
+      } catch {
+        // L'enseigne n'a pas pu être nommée : l'UUID reste affiché tel quel.
+        tenantCode = null;
+      }
     } catch (error) {
       tenantError = asApiError(error);
       catalogLoaded = false;
@@ -181,7 +189,7 @@
     {#if catalogLoaded}
       <div class="tenant">
         Enseigne<br />
-        <code>{tenantId}</code>
+        <code title={tenantId}>{tenantCode ?? tenantId}</code>
       </div>
     {/if}
   </header>

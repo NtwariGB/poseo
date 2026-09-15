@@ -127,6 +127,15 @@ async function request<T>(
   return payload as T;
 }
 
+/** Tenant résolu par le middleware à partir de l'en-tête `X-Tenant-Id`. */
+export interface CurrentTenant {
+  id: string;
+  code: string;
+}
+
+export const getCurrentTenant = (): Promise<CurrentTenant> =>
+  request('GET', '/tenant/me');
+
 export const listProductTypes = (): Promise<CatalogItem[]> =>
   request('GET', '/catalog/product-types');
 
